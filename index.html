@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-50">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CareTrack Edu - ระบบติดตามนักศึกษาขาดเรียนบ่อย วิทยาลัยการอาชีพเวียงสระ</title>
+  <link rel="icon" type="image/png" href="logo.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Sarabun', 'sans-serif'],
+            heading: ['Prompt', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="h-full flex flex-col text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Top Sticky Header -->
+  <header class="no-print sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200/80 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+
+      <!-- Brand & School Logo (Clickable -> Home / Dashboard) -->
+      <a href="#" onclick="switchTab('dashboard'); return false;"
+        class="flex items-center gap-3 cursor-pointer group hover:opacity-90 transition select-none"
+        title="คลิกเพื่อกลับสู่หน้าแรก (Home)">
+        <img src="logo.png" alt="โลโก้วิทยาลัยการอาชีพเวียงสระ"
+          class="w-11 h-11 object-contain drop-shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-200">
+        <div>
+          <div class="flex items-center gap-2">
+            <span
+              class="font-heading font-bold text-lg text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">CareTrack</span>
+          </div>
+          <p id="school-title" class="text-xs text-slate-600 font-semibold tracking-wide">วิทยาลัยการอาชีพเวียงสระ</p>
+        </div>
+      </a>
+
+      <!-- Main Navigation Menu -->
+      <nav class="hidden md:flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/60">
+        <button data-tab="dashboard" onclick="switchTab('dashboard')"
+          class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-600/30">
+          <i class="fa-solid fa-chart-pie"></i> ภาพรวมความเสี่ยง
+        </button>
+        <button data-tab="students" onclick="switchTab('students')"
+          class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-users-viewfinder"></i> รายชื่อ & คัดกรอง
+        </button>
+        <button data-tab="attendance" onclick="switchTab('attendance')"
+          class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-clipboard-check"></i> เช็คชื่อประจำคาบ
+        </button>
+        <button data-tab="care_logs" onclick="switchTab('care_logs')"
+          class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-hand-holding-heart"></i> บันทึกการดูแล
+        </button>
+        <button data-tab="report" onclick="switchTab('report')"
+          class="nav-tab-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200/70 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-file-invoice"></i> พิมพ์รายงานสรุป
+        </button>
+      </nav>
+
+      <!-- Right Action Items -->
+      <div class="flex items-center gap-3">
+        <!-- Notification Bell -->
+        <div class="relative">
+          <button onclick="toggleNotificationDrawer()"
+            class="relative p-2.5 rounded-xl text-slate-600 hover:text-blue-600 hover:bg-slate-100 transition"
+            title="การแจ้งเตือนเคสด่วน">
+            <i class="fa-solid fa-bell text-lg"></i>
+            <span id="notif-badge"
+              class="hidden absolute top-1 right-1 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+              0
+            </span>
+          </button>
+        </div>
+
+        <!-- Supabase Cloud Connection Status Button -->
+        <button id="supabase-status-btn" onclick="openSupabaseModal()"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition shadow-xs"
+          title="เชื่อมต่อฐานข้อมูล Supabase">
+          <span id="supabase-status-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+          <span id="supabase-status-text">เชื่อมต่อ Supabase</span>
+        </button>
+
+        <!-- Sync Cloud Data Button -->
+        <button onclick="syncLatestFromCloud()"
+          class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 rounded-xl transition shadow-xs"
+          title="ซิงค์ข้อมูลล่าสุดจาก Supabase Cloud">
+          <i class="fa-solid fa-rotate text-blue-600"></i> ซิงค์ข้อมูล
+        </button>
+
+        <!-- Current User Profile -->
+        <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+          <div
+            class="w-8 h-8 rounded-full bg-blue-100 border border-blue-300 text-blue-700 flex items-center justify-center text-xs font-bold">
+            วก
+          </div>
+          <div class="hidden lg:block text-left">
+            <div class="text-xs font-bold text-slate-800 leading-tight">งานครูที่ปรึกษา</div>
+            <div class="text-[10px] text-slate-500">วิทยาลัยการอาชีพเวียงสระ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Nav Bar (Visible on mobile only) -->
+    <div
+      class="md:hidden border-t border-slate-200 bg-white px-2 py-1.5 flex items-center justify-between overflow-x-auto">
+      <button onclick="switchTab('dashboard')"
+        class="px-2.5 py-1 text-xs font-semibold text-slate-700 flex items-center gap-1 shrink-0">
+        <i class="fa-solid fa-chart-pie text-blue-600"></i> ภาพรวม
+      </button>
+      <button onclick="switchTab('students')"
+        class="px-2.5 py-1 text-xs font-semibold text-slate-700 flex items-center gap-1 shrink-0">
+        <i class="fa-solid fa-users-viewfinder text-indigo-600"></i> รายชื่อ
+      </button>
+      <button onclick="switchTab('attendance')"
+        class="px-2.5 py-1 text-xs font-semibold text-slate-700 flex items-center gap-1 shrink-0">
+        <i class="fa-solid fa-clipboard-check text-emerald-600"></i> เช็คชื่อ
+      </button>
+      <button onclick="switchTab('care_logs')"
+        class="px-2.5 py-1 text-xs font-semibold text-slate-700 flex items-center gap-1 shrink-0">
+        <i class="fa-solid fa-hand-holding-heart text-purple-600"></i> บันทึกดูแล
+      </button>
+      <button onclick="switchTab('report')"
+        class="px-2.5 py-1 text-xs font-semibold text-slate-700 flex items-center gap-1 shrink-0">
+        <i class="fa-solid fa-print text-slate-600"></i> รายงาน
+      </button>
+    </div>
+  </header>
+
+  <!-- Notification Drawer Dropdown -->
+  <div id="notification-drawer"
+    class="hidden no-print fixed top-16 right-4 sm:right-8 w-80 sm:w-96 max-h-[80vh] bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200">
+    <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-bell text-blue-600"></i>
+        <span class="font-bold text-slate-800 text-sm">การแจ้งเตือนเคสด่วน</span>
+      </div>
+      <button onclick="markAllNotificationsRead()" class="text-[11px] text-blue-600 hover:underline font-semibold">
+        อ่านทั้งหมดแล้ว
+      </button>
+    </div>
+    <div id="notification-list" class="p-3 space-y-2.5 overflow-y-auto max-h-[60vh]">
+      <!-- Dynamic notifications inserted here -->
+    </div>
+  </div>
+
+  <!-- Main View Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div id="main-content">
+      <!-- Dynamic Tabs Content Rendered by JavaScript -->
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="no-print bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2 justify-center sm:justify-start">
+        <img src="logo.png" alt="โลโก้วิทยาลัยการอาชีพเวียงสระ" class="w-5 h-5 object-contain">
+        <span><strong>CareTrack Edu</strong> — วิทยาลัยการอาชีพเวียงสระ</span>
+      </div>
+      <div>
+        ระบบเฝ้าระวังและป้องกันนักศึกษาหลุดจากระบบการศึกษา งานครูที่ปรึกษาและงานแนะแนว
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Stack -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL 1: บันทึกการดูแลและช่วยเหลือ (Care Intervention Modal)     -->
+  <!-- ============================================================== -->
+  <div id="care-log-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div
+      class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div
+        class="p-5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2.5">
+          <i class="fa-solid fa-hand-holding-heart text-xl text-blue-200"></i>
+          <div>
+            <h3 class="font-bold text-base">บันทึกการดูแลและช่วยเหลือรายกรณี</h3>
+            <p class="text-xs text-blue-100">บันทึกการติดตามโดยครูที่ปรึกษาเพื่อป้องกันการหลุดจากระบบ</p>
+          </div>
+        </div>
+        <button onclick="closeCareLogModal()" class="text-white/80 hover:text-white text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Form Content -->
+      <form onsubmit="saveCareLogForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+        <!-- Student Selector -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">เลือกนักศึกษาที่ต้องการติดตามดูแล</label>
+          <select id="care-modal-student-select"
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Date -->
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">วันที่ดำเนินการติดตาม</label>
+            <input type="date" id="care-modal-date" required
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+
+          <!-- Channel -->
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ช่องทางการติดต่อ</label>
+            <select id="care-modal-channel"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="phone_parent">โทรศัพท์ติดต่อผู้ปกครอง</option>
+              <option value="phone_student">โทรศัพท์พูดคุยกับนักศึกษา</option>
+              <option value="in_person">พูดคุยตัวต่อตัวที่ห้องพักครู</option>
+              <option value="visit_home">ลงพื้นที่เยี่ยมบ้าน</option>
+              <option value="line">พูดคุยผ่าน LINE / แชท</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Cause Category Selector -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">
+            ปัจจัย / กลุ่มสาเหตุหลักที่พบ <span class="text-blue-600 font-normal">(จะนำไปแสดงในกราฟสถิติทันที)</span>
+          </label>
+          <select id="care-modal-cause" required
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="ปัญหาการเงิน / ค่าครองชีพ">💰 ปัญหาการเงิน / ค่าครองชีพ / ทำงานกะดึก</option>
+            <option value="ปัญหาการเดินทาง / ค่ารถ">🛵 ปัญหาการเดินทาง / ยานพาหนะ / ระยะทางไกล</option>
+            <option value="ปัญหาสุขภาพจิต / วิตกกังวล">🧠 ปัญหาสุขภาพจิต / วิตกกังวล / ซึมเศร้า</option>
+            <option value="ปัญหาสุขภาพกาย / เจ็บป่วย">🏥 ปัญหาสุขภาพกาย / เจ็บป่วยเรื้อรัง</option>
+            <option value="ติดเกม / ขาดแรงจูงใจ">🎮 ติดเกม / นอนดึก / ขาดแรงจูงใจ</option>
+            <option value="ปัญหากับเพื่อน / การปรับตัว">👥 ปัญหากับเพื่อน / การปรับตัวในห้องเรียน</option>
+            <option value="ภาระครอบครัว / ช่วยงานที่บ้าน">👨‍👩‍👧 ภาระครอบครัว / ช่วยงานที่บ้าน</option>
+            <option value="อื่นๆ">❓ อื่นๆ</option>
+          </select>
+        </div>
+
+        <!-- Notes / Problem Description -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">รายละเอียดปัญหาเพิ่มเติมที่พบจากการพูดคุย</label>
+          <textarea id="care-modal-notes" rows="3" required
+            placeholder="ระบุสาเหตุ เช่น ปัญหาการเงิน, สุขภาพ, เพื่อน, ติดงานกลางคืน..."
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Action Plan -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">แนวทางและมาตรการช่วยเหลือที่ดำเนินการ</label>
+          <textarea id="care-modal-action" rows="3" required
+            placeholder="ระบุการช่วยเหลือ เช่น ประสานงานขอทุน, นัดส่งงานย้อนหลัง, ให้คำปรึกษา..."
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Follow-up Date -->
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">นัดติดตามผลรอบต่อไป (ถ้ามี)</label>
+            <input type="date" id="care-modal-followup"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+
+          <!-- Status -->
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">สถานะหลังการติดตาม</label>
+            <select id="care-modal-status"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="in_progress">กำลังติดตามต่อเนื่อง (In Progress)</option>
+              <option value="resolved">ปัญหาคลี่คลายแล้ว / กลับมาเรียนปกติ (Resolved)</option>
+              <option value="escalated">ส่งต่อฝ่ายแนะแนว / ฝ่ายวิชาการ (Escalated)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeCareLogModal()"
+            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+            ยกเลิก
+          </button>
+          <button type="submit"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL 2: โปรไฟล์นักศึกษาฉบับเต็ม (Student Profile Modal)         -->
+  <!-- ============================================================== -->
+  <div id="student-profile-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div
+      class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+        <span class="font-bold text-slate-700 text-sm">แฟ้มประวัตินักศึกษา & การเฝ้าระวัง</span>
+        <button onclick="closeStudentProfileModal()" class="text-slate-400 hover:text-slate-700 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div id="profile-modal-content" class="p-6 overflow-y-auto flex-1">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL 3: จำลองหน้าต่าง LINE Notify (LINE Simulation Modal)      -->
+  <!-- ============================================================== -->
+  <div id="line-sim-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+    <div
+      class="bg-slate-800 rounded-3xl max-w-sm w-full shadow-2xl border-4 border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+      <!-- Simulated Phone Top Bar -->
+      <div class="bg-emerald-600 text-white p-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-brands fa-line text-2xl text-white"></i>
+          <div>
+            <div class="font-bold text-xs">LINE Notify Official</div>
+            <div class="text-[10px] text-emerald-100 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-300"></span> วิทยาลัยการอาชีพเวียงสระ
+            </div>
+          </div>
+        </div>
+        <button onclick="closeLineNotifyModal()" class="text-white/80 hover:text-white">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Chat Screen Area -->
+      <div class="line-screen p-4 min-h-[300px] flex flex-col justify-start space-y-3">
+        <div class="text-center">
+          <span class="px-2.5 py-0.5 rounded-full bg-black/20 text-white text-[10px] backdrop-blur-xs">วันนี้</span>
+        </div>
+
+        <!-- Chat Bubble -->
+        <div class="flex items-start gap-2 max-w-[92%]">
+          <div
+            class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm shrink-0 shadow">
+            <i class="fa-solid fa-bell"></i>
+          </div>
+          <div class="line-bubble p-3 text-left">
+            <div id="line-sim-body">
+              <!-- Content injected via JS -->
+            </div>
+            <div class="text-right text-[9px] text-slate-400 mt-1" id="line-sim-time">
+              10:30
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phone Footer -->
+      <div class="p-3 bg-slate-900 text-center">
+        <button onclick="closeLineNotifyModal()"
+          class="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-full transition">
+          ปิดหน้าต่างจำลอง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL 4: เพิ่มข้อมูลนักศึกษาใหม่ (Add Student Modal)             -->
+  <!-- ============================================================== -->
+  <div id="add-student-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div
+      class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div
+        class="p-5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0">
+        <h3 class="font-bold text-base flex items-center gap-2">
+          <i class="fa-solid fa-user-plus"></i> เพิ่มข้อมูลนักศึกษาใหม่เข้าสู่ระบบ
+        </h3>
+        <button onclick="closeAddStudentModal()" class="text-white/80 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form onsubmit="saveNewStudent(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">รหัสนักศึกษา</label>
+            <input type="text" id="new-stu-code" required placeholder="6620901XX"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">คำนำหน้า</label>
+            <select id="new-stu-prefix"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="นาย">นาย</option>
+              <option value="น.ส.">น.ส.</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ชื่อ</label>
+            <input type="text" id="new-stu-first" required placeholder="ชื่อจริง"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">นามสกุล</label>
+            <input type="text" id="new-stu-last" required placeholder="นามสกุล"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ห้องเรียน / ระดับชั้น</label>
+            <select id="add-student-classroom"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ครูที่ปรึกษาผู้รับผิดชอบ</label>
+          <input type="text" id="new-stu-advisor" placeholder="ระบุชื่อ-สกุล ครูที่ปรึกษา"
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">เบอร์โทรนักศึกษา</label>
+            <input type="tel" id="new-stu-phone" placeholder="08X-XXX-XXXX"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ชื่อผู้ปกครอง</label>
+            <input type="text" id="new-stu-parent-name" placeholder="นาย/นาง... (บิดา/มารดา)"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">เบอร์โทรผู้ปกครอง (สำหรับติดต่อด่วน)</label>
+          <input type="tel" id="new-stu-parent-phone" placeholder="08X-XXX-XXXX"
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">ปัจจัย / สาเหตุความเสี่ยงเบื้องต้น (ถ้ามี)</label>
+          <select id="new-stu-cause"
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="-">-- ยังไม่ระบุ (ปกติ/รอตรวจสอบ) --</option>
+            <option value="ปัญหาการเงิน / ค่าครองชีพ">💰 ปัญหาการเงิน / ค่าครองชีพ / ทำงานกะดึก</option>
+            <option value="ปัญหาการเดินทาง / ค่ารถ">🛵 ปัญหาการเดินทาง / ยานพาหนะ / ระยะทางไกล</option>
+            <option value="ปัญหาสุขภาพจิต / วิตกกังวล">🧠 ปัญหาสุขภาพจิต / วิตกกังวล / ซึมเศร้า</option>
+            <option value="ปัญหาสุขภาพกาย / เจ็บป่วย">🏥 ปัญหาสุขภาพกาย / เจ็บป่วยเรื้อรัง</option>
+            <option value="ติดเกม / ขาดแรงจูงใจ">🎮 ติดเกม / นอนดึก / ขาดแรงจูงใจ</option>
+            <option value="ปัญหากับเพื่อน / การปรับตัว">👥 ปัญหากับเพื่อน / การปรับตัวในห้องเรียน</option>
+            <option value="ภาระครอบครัว / ช่วยงานที่บ้าน">👨‍👩‍👧 ภาระครอบครัว / ช่วยงานที่บ้าน</option>
+            <option value="อื่นๆ">❓ อื่นๆ</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeAddStudentModal()"
+            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+            ยกเลิก
+          </button>
+          <button type="submit"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-check"></i> บันทึกข้อมูลนักศึกษา
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL 5: ตั้งค่าการเชื่อมต่อ Supabase (Supabase Settings Modal) -->
+  <!-- ============================================================== -->
+  <div id="supabase-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+    <div
+      class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+      <!-- Modal Header -->
+      <div
+        class="p-5 bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">
+            <i class="fa-solid fa-database text-emerald-300"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base">เชื่อมต่อฐานข้อมูล Cloud (Supabase)</h3>
+            <p class="text-xs text-emerald-100">ซิงค์ข้อมูลนักศึกษาและการเช็คชื่อแบบเรียลไทม์ข้ามอุปกรณ์</p>
+          </div>
+        </div>
+        <button onclick="closeSupabaseModal()" class="text-white/80 hover:text-white text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+        <!-- Status indicator banner -->
+        <div id="supabase-modal-status-msg" class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+          <!-- Populated via JS -->
+        </div>
+
+        <!-- Quick 3-Step Setup Instructions -->
+        <div class="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-2 text-emerald-950">
+          <div class="font-bold text-emerald-900 flex items-center gap-1.5 text-xs">
+            <i class="fa-solid fa-circle-question text-emerald-600"></i> ขั้นตอนการเชื่อมต่อ Supabase:
+          </div>
+          <ol class="list-decimal list-inside space-y-1 text-[11px] text-emerald-900 leading-relaxed">
+            <li>สร้างโปรเจกต์ฟรีที่เว็บไซต์ <strong>supabase.com</strong></li>
+            <li>ไปที่เมนู <strong>SQL Editor</strong> แล้วคัดลอกคำสั่งในไฟล์ <code
+                class="bg-white px-1.5 py-0.5 rounded border border-emerald-300 font-mono">supabase-schema.sql</code>
+              ไปกด <strong>Run</strong></li>
+            <li>ไปที่เมนู <strong>Project Settings &gt; API</strong> แล้วนำ <strong>Project URL</strong> และ
+              <strong>anon public API Key</strong> มากรอกในช่องด้านล่าง
+            </li>
+          </ol>
+        </div>
+
+        <!-- Connection Form -->
+        <form onsubmit="handleSaveSupabaseConfig(event)" class="space-y-3 pt-1">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">
+              Project URL <span class="text-red-500">*</span>
+            </label>
+            <input type="url" id="supabase-url-input" required placeholder="https://your-project-id.supabase.co"
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">
+              Anon Public API Key <span class="text-red-500">*</span>
+            </label>
+            <input type="password" id="supabase-key-input" required
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+          </div>
+
+          <!-- Buttons -->
+          <div class="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="handleDisconnectSupabase()"
+                class="px-3 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 rounded-xl font-semibold transition">
+                <i class="fa-solid fa-power-off mr-1"></i> ตัดการเชื่อมต่อ
+              </button>
+              <button type="button" id="btn-upload-local-data" onclick="uploadAllLocalDataToSupabase()"
+                class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-semibold transition"
+                title="ส่งข้อมูลนักศึกษาและบันทึกการดูแลปัจจุบันขึ้น Supabase">
+                <i class="fa-solid fa-cloud-arrow-up mr-1"></i> อัปโหลดข้อมูลเริ่มต้นขึ้น Cloud
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="closeSupabaseModal()"
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+                ปิด
+              </button>
+              <button type="submit" id="btn-save-supabase"
+                class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-plug"></i> บันทึกและเชื่อมต่อ
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="data.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
